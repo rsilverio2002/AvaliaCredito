@@ -1,0 +1,169 @@
+library(readr)
+library(caret)
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(randomForest)
+library(ROCR)
+library(DMwR)
+
+#Leitura e tratamento dos dados----------------
+
+dados<-read_csv('credit_dataset.csv')
+
+# Converter variáveis em fatores
+
+dados<-mutate_at(dados,vars(-credit.duration.months,-age,-credit.amount),as.factor)
+
+
+#Visualizações para análise exploratória dos dados------------------
+
+#função para gerar histograma das variáveis envolvidas
+
+genhist<-function(x,data=dados){
+   data%>%
+    ggplot()+
+    geom_bar(aes_string(x))+
+    facet_wrap(credit.rating~.)+
+    ggtitle(paste(x))
+}
+
+# geração de histogramas para todas as variáveis comparado com credit rating
+
+lapply(colnames(dados),genhist)
+
+# identificação de valores únicos para cada variável
+
+countunique<-function(x){
+dados%>%
+  select(x)%>%
+  unique()%>%
+    count()
+}
+
+
+sapply(colnames(dados),countunique)
+
+#quebra em bins das variáveis 'contínuas'
+age_q<-quantile(dados$age,probs = seq(0, 1, 0.5))
+credit.amount_q<-quantile(dados$credit.amount,probs = seq(0, 1, 0.5))
+credit.duration.months_q<-quantile(dados$credit.duration.months,probs = seq(0, 1, 0.5))
+
+dados<-dados%>%
+  mutate(age_q=cut(age,breaks=c(-Inf,age_q,Inf)))%>%
+  mutate(credit.amount_q=cut(credit.amount,breaks=c(-Inf,credit.amount_q,Inf)))%>%
+  mutate(credit.duration.months_q=cut(credit.duration.months,breaks = c(-Inf,credit.duration.months_q,Inf)))
+
+
+
+# Identificação das principais features--------
+
+model<-randomForest(data=dados,credit.rating ~ . 
+                    -age
+                    -credit.amount
+                    -credit.duration.months
+                    ,importance=TRUE)
+
+varImpPlot(model)
+
+#Resultado sugere que as variáveis relacionadas ao status financeiro da pessoa são as mais críticas
+
+#Usando rfe do CARET
+
+control <- rfeControl(functions=rfFuncs, method="cv", number=10)
+
+results <- rfe(data=dados,credit.rating ~ ., sizes=c(1:15), rfeControl=control)
+
+print(results)
+
+
+#Criando Modelos com as variáveis listadas na etapa anterior-----------------
+#Planejo testar três algoritmos e checar qual o melhor
+#separar dados em teste e treino
+
+#Balanceamento dos dados usando SMOTE
+
+baldados<-SMOTE(credit.rating ~ account.balance + credit.duration.months_q + previous.credit.payment.status
+                + credit.amount_q
+                + savings,data=as.data.frame(dados))
+
+genhist('credit.rating',baldados)
+
+
+x<-createDataPartition(baldados$credit.rating,p=0.8,list=FALSE)
+
+train<-baldados[x,]
+test<-baldados[-x,]
+
+##### Modelo 1 - Naive Bayes ---------
+
+model1<-train(data=train, credit.rating ~ account.balance + credit.duration.months_q + previous.credit.payment.status
+                                    + credit.amount_q
+                                    + savings,
+              method = 'naive_bayes')
+pred1<-predict(model1, newdata=test)
+
+summary(model1)
+model1
+plot(model1)
+
+confusionMatrix(test$credit.rating,pred1)
+
+
+
+
+##### Model 2 - SVM--------
+
+model2<-train(credit.rating ~ account.balance + credit.duration.months_q + previous.credit.payment.status
+              + credit.amount_q
+              + savings,data=train,
+              method = 'svmLinear')
+
+pred2<-predict(model2, newdata=test)
+
+summary(model2)
+model2
+plot(model2)
+
+confusionMatrix(test$credit.rating,pred2)
+
+
+##### Model 3 - adaBoost--------
+
+model3<-train(credit.rating ~ account.balance + credit.duration.months_q + previous.credit.payment.status
+              + credit.amount_q
+              + savings,data=train,
+              method = 'adaboost')
+
+pred3<-predict(model3, newdata=test)
+
+summary(model3)
+model3
+plot(model3)
+
+confusionMatrix(test$credit.rating,pred3)
+
+
+##### Criando gráficos ROC para os modelos-----
+
+predm1<-prediction(as.numeric(pred1),as.numeric(test$credit.rating))
+perf1<-performance(predm1,'tpr','fpr')
+plot(perf1)
+abline(0,1)
+auc1 <- performance(predm1, measure = "auc")
+auc1@y.values
+
+predm2<-prediction(as.numeric(pred2),as.numeric(test$credit.rating))
+perf2<-performance(predm2,'tpr','fpr')
+plot(perf2)
+abline(0,1)
+auc2 <- performance(predm2, measure = "auc")
+auc2@y.values
+
+
+predm3<-prediction(as.numeric(pred3),as.numeric(test$credit.rating))
+perf3<-performance(predm3,'tpr','fpr')
+plot(perf3)
+abline(0,1)
+auc3 <- performance(predm3, measure = "auc")
+auc3@y.values
