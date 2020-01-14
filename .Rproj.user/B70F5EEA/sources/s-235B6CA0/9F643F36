@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1578971308560.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "9F643F36",
+    "lastKnownWriteTime" : 1578971246,
+    "last_content_update" : 1578971246,
+    "path" : "~/GitHub/AvaliaCredito/AvaliaCredito.R",
+    "project_path" : "AvaliaCredito.R",
+    "properties" : {
+        "cursorPosition" : "169,0",
+        "scrollLine" : "138"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
